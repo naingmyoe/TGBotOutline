@@ -1,20 +1,22 @@
 #!/bin/bash
 
-# အရောင်များtt
+# အရောင်များ
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (FIXED)         ${NC}"
+echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (DELL UI)       ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
 echo -e "${CYAN}--- [1/3] SERVER CONFIGURATION ---${NC}"
 read -p "1. Enter Telegram Bot Token: " BOT_TOKEN
-read -p "2. Enter Outline API URL (Full URL): " API_URL
+echo -e "${YELLOW}⚠️  Note: API URL must start with 'https://' and end with secret key.${NC}"
+read -p "2. Enter Outline API URL: " API_URL
 read -p "3. Enter Admin Telegram ID (Numeric only): " ADMIN_ID
 read -p "4. Enter Admin Username (e.g. @admin): " ADMIN_USERNAME
 
@@ -76,9 +78,7 @@ npm install pm2 -g
 # ---------------------------------------------------------
 echo -e "${YELLOW}📝 Generating bot.js...${NC}"
 
-# Create bot.js using simple echo to avoid EOF errors
 touch bot.js
-
 cat > bot.js <<'END_OF_FILE'
 const axios = require('axios');
 const https = require('https');
@@ -122,21 +122,35 @@ const CLAIM_FILE = 'claimed_users.json';
 let claimedUsers = [];
 if (fs.existsSync(CLAIM_FILE)) { try { claimedUsers = JSON.parse(fs.readFileSync(CLAIM_FILE)); } catch(e) {} }
 
+// --- HELPERS (DELL STYLE) ---
 function formatBytes(bytes) {
     if (!bytes || bytes === 0) return '0 B';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + ['B', 'KB', 'MB', 'GB', 'TB'][i];
 }
+
 function getFutureDate(days) {
     const date = new Date(); date.setDate(date.getDate() + parseInt(days)); return date.toISOString().split('T')[0];
 }
+
+function getDaysRemaining(dateString) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return "Unknown";
+    const today = new Date();
+    const target = new Date(dateString);
+    const diffTime = target - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? `${diffDays} Days` : "Expired";
+}
+
 function getProgressBar(used, total) {
     if (total === 0) return "ERROR";
     const percentage = Math.min((used / total) * 100, 100);
     const totalLength = 10; 
     const filledLength = Math.round((percentage / 100) * totalLength);
+    
+    // DELL STYLE: [████░░░░░░]
     const bar = '█'.repeat(filledLength) + '░'.repeat(totalLength - filledLength);
-    return `${bar} ${percentage.toFixed(1)}%`;
+    return `[${bar}] ${percentage.toFixed(1)}%`;
 }
 
 // 🤖 INTERACTION LOGIC
@@ -198,6 +212,7 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.sendMessage(chatId, `✅ **Selected:** ${PLANS[realPlanKey].name}\n💰 **Price:** ${PLANS[realPlanKey].price}\n\n${PAYMENT_INFO}`, { parse_mode: 'Markdown' });
     }
 
+    // ADMIN ACTIONS
     if (String(chatId) === String(ADMIN_ID)) {
         if (data === 'admin_panel' || data === 'admin_list_users') await sendUserList(chatId);
         if (data.startsWith('approve_')) {
@@ -237,23 +252,53 @@ bot.on('photo', async (msg) => {
 });
 bot.onText(/\/manage[ _](.+)/, async (msg, match) => { if (String(msg.chat.id) === String(ADMIN_ID)) await sendKeyDetails(msg.chat.id, match[1].trim()); });
 
+// --- CORE FUNCTIONS (USER VIEW) ---
 async function checkUserStatus(chatId, firstName) {
     try {
         const [kRes, mRes] = await Promise.all([client.get(`${OUTLINE_API_URL}/access-keys`), client.get(`${OUTLINE_API_URL}/metrics/transfer`)]);
         const myKey = kRes.data.accessKeys.find(k => k.name.includes(firstName));
-        if (!myKey) return bot.sendMessage(chatId, "❌ **Account Not Found**");
+        
+        if (!myKey) return bot.sendMessage(chatId, "❌ **Account Not Found**\n(Name mismatch? Contact Admin)");
+        
         const used = mRes.data.bytesTransferredByUserId[myKey.id] || 0;
         const limit = myKey.dataLimit ? myKey.dataLimit.bytes : 0;
-        let status = "🟢 Active"; let isBlocked = false;
-        if (limit > 0 && (limit - used) <= 0) { status = "🔴 Data Depleted"; isBlocked = true; }
+        const remaining = limit - used;
+        
+        // Parse Name & Date
+        let cleanName = myKey.name;
+        let expireDate = "Unknown";
+        if (myKey.name.includes('|')) {
+            const parts = myKey.name.split('|');
+            cleanName = parts[0].trim();
+            expireDate = parts[1].trim();
+        }
+
+        // Status Logic
+        let status = "🟢 Active";
+        let isBlocked = false;
+        if (limit > 0 && remaining <= 0) { status = "🔴 Data Depleted"; isBlocked = true; }
         if (limit <= 5000) { status = "🔴 Expired/Blocked"; isBlocked = true; }
-        const isTestKey = myKey.name.startsWith("TEST_");
-        if (isTestKey) status += " (TRIAL)";
-        const msg = `👤 **Name:** ${myKey.name.split('|')[0].trim()}\n📡 **Status:** ${status}\n⬇️ **Used:** ${formatBytes(used)} / ${formatBytes(limit)}\n${getProgressBar(used, limit)}`;
+        if (myKey.name.startsWith("TEST_")) status += " (TRIAL)";
+
+        const remainingDays = getDaysRemaining(expireDate);
+
+        // DELL DESIGN OUTPUT
+        const msg = `
+👤 **Name:** ${cleanName}
+📡 **Status:** ${status}
+⏳ **Remaining Day:** ${remainingDays}
+⬇️ **Used:** ${formatBytes(used)}
+🎁 **Remaining:** ${formatBytes(remaining > 0 ? remaining : 0)}
+📅 **Expire:** ${expireDate}
+
+${getProgressBar(used, limit)}
+`;
         const opts = { parse_mode: 'Markdown' };
-        if (isBlocked && !isTestKey) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
-        else if (isTestKey && isBlocked) opts.reply_markup = { inline_keyboard: [[{ text: "🛒 Upgrade to Premium", callback_data: `buy_vpn` }]] };
+        if (isBlocked && !myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
+        else if (isBlocked && myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🛒 Upgrade to Premium", callback_data: `buy_vpn` }]] };
+        
         bot.sendMessage(chatId, msg, opts);
+
     } catch (e) { bot.sendMessage(chatId, "⚠️ Server Error."); }
 }
 
@@ -289,26 +334,54 @@ async function sendUserList(chatId) {
     try {
         const res = await client.get(`${OUTLINE_API_URL}/access-keys`);
         let message = "👥 **User List**\n\n";
-        res.data.accessKeys.forEach(k => { 
-            message += `🆔 \`${k.id}\` : ${k.name}\n👉 /manage_${k.id}\n\n`; 
-        });
+        res.data.accessKeys.forEach(k => { message += `🆔 \`${k.id}\` : ${k.name}\n👉 /manage_${k.id}\n\n`; });
         bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     } catch (e) {
-        console.error(e);
-        bot.sendMessage(chatId, `❌ **Server Connection Failed!**\n\nError: ${e.message}\n\n1. API URL မှန်မမှန် ပြန်စစ်ပါ။\n2. VPS က Outline Server ကို လှမ်းခေါ်လို့ရမရ စစ်ပါ။`);
+        bot.sendMessage(chatId, `❌ **API Error!**\n\n${e.message}`);
     }
 }
 
+// 🔥 UPDATED ADMIN VIEW (SAME AS USER VIEW) 🔥
 async function sendKeyDetails(chatId, keyId) {
     try {
         const [keysRes, metricsRes] = await Promise.all([client.get(`${OUTLINE_API_URL}/access-keys`), client.get(`${OUTLINE_API_URL}/metrics/transfer`)]);
         const key = keysRes.data.accessKeys.find(k => String(k.id) === String(keyId));
         if (!key) return bot.sendMessage(chatId, "❌ Key not found.");
+
         const usage = metricsRes.data.bytesTransferredByUserId[key.id] || 0;
         const limit = key.dataLimit ? key.dataLimit.bytes : 0;
-        const msg = `👤 ${key.name}\n🆔 \`${key.id}\`\n📊 ${formatBytes(usage)} / ${formatBytes(limit)}`;
+        const remaining = limit - usage;
+
+        // Parse Name & Date
+        let cleanName = key.name;
+        let expireDate = "Unknown";
+        if (key.name.includes('|')) {
+            const parts = key.name.split('|');
+            cleanName = parts[0].trim();
+            expireDate = parts[1].trim();
+        }
+
+        let status = "🟢 Active";
+        if (limit > 0 && remaining <= 0) status = "🔴 Data Depleted";
+        if (limit <= 5000) status = "🔴 Expired/Blocked";
+
+        const remainingDays = getDaysRemaining(expireDate);
+
+        // DELL DESIGN OUTPUT
+        const msg = `
+👤 **Name:** ${cleanName}
+📡 **Status:** ${status}
+⏳ **Remaining Day:** ${remainingDays}
+⬇️ **Used:** ${formatBytes(usage)}
+🎁 **Remaining:** ${formatBytes(remaining > 0 ? remaining : 0)}
+📅 **Expire:** ${expireDate}
+
+${getProgressBar(usage, limit)}
+`;
         bot.sendMessage(chatId, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🗑️ DELETE", callback_data: `confirm_delete_${key.id}` }]] } });
-    } catch (e) {}
+    } catch (e) {
+        bot.sendMessage(chatId, `❌ **Error:** ${e.message}`);
+    }
 }
 
 async function runGuardian() {
@@ -383,4 +456,4 @@ pm2 save
 pm2 startup
 
 echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
-echo -e "${YELLOW}Your VPN Shop Bot is running.${NC}"
+echo -e "${YELLOW}Your VPN Shop Bot is running with Dell UI!${NC}"
