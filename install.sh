@@ -1,22 +1,21 @@
 #!/bin/bash
 
-# အရောင်များနိုင်နိုင်
+# အရောင်များtt
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (DEBUG VERSION) ${NC}"
+echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (FIXED)         ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
 echo -e "${CYAN}--- [1/3] SERVER CONFIGURATION ---${NC}"
 read -p "1. Enter Telegram Bot Token: " BOT_TOKEN
 read -p "2. Enter Outline API URL (Full URL): " API_URL
-read -p "3. Enter Admin Telegram ID (Numeric only, e.g. 123456789): " ADMIN_ID
+read -p "3. Enter Admin Telegram ID (Numeric only): " ADMIN_ID
 read -p "4. Enter Admin Username (e.g. @admin): " ADMIN_USERNAME
 
 echo -e ""
@@ -63,7 +62,7 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 apt install -y nodejs
 
 echo -e "${YELLOW}📁 Setting up Project Folder...${NC}"
-rm -rf /root/vpn-shop # Clean old folder
+rm -rf /root/vpn-shop
 mkdir -p /root/vpn-shop
 cd /root/vpn-shop
 
@@ -75,9 +74,12 @@ npm install pm2 -g
 # ---------------------------------------------------------
 # GENERATING BOT.JS
 # ---------------------------------------------------------
-echo -e "${YELLOW}📝 Generating bot.js with DEBUG features...${NC}"
+echo -e "${YELLOW}📝 Generating bot.js...${NC}"
 
-cat <<'EOF' > bot.js
+# Create bot.js using simple echo to avoid EOF errors
+touch bot.js
+
+cat > bot.js <<'END_OF_FILE'
 const axios = require('axios');
 const https = require('https');
 const TelegramBot = require('node-telegram-bot-api');
@@ -88,7 +90,7 @@ const fs = require('fs');
 // ================================================================
 const OUTLINE_API_URL = "REPLACE_API_URL"; 
 const TELEGRAM_TOKEN = "REPLACE_BOT_TOKEN"; 
-const ADMIN_ID = REPLACE_ADMIN_ID; // This will be replaced by script
+const ADMIN_ID = REPLACE_ADMIN_ID; 
 
 const AUTO_DELETE_HOURS = 24; 
 const TEST_PLAN = { days: 1, gb: 1 }; 
@@ -139,7 +141,6 @@ function getProgressBar(used, total) {
 
 // 🤖 INTERACTION LOGIC
 bot.onText(/\/start/, (msg) => {
-    // --- DEBUGGING LOGIC ---
     const userId = msg.chat.id;
     console.log(`[DEBUG] User ID: ${userId} | Admin ID Configured: ${ADMIN_ID}`);
     
@@ -150,12 +151,9 @@ bot.onText(/\/start/, (msg) => {
         [{ text: "🆘 Contact Admin", url: 'https://t.me/REPLACE_ADMIN_USER' }]
     ];
 
-    // STRICT CHECK FOR ADMIN ID (String comparison)
     if (String(userId) === String(ADMIN_ID)) {
         console.log("✅ ADMIN MATCHED! Showing Panel.");
         buttons.push([{ text: "👮‍♂️ Admin Panel", callback_data: 'admin_panel' }]);
-    } else {
-        console.log("❌ Not Admin.");
     }
 
     bot.sendMessage(userId, "👋 Welcome to VPN Shop!", { reply_markup: { inline_keyboard: buttons } });
@@ -196,4 +194,187 @@ bot.on('callback_query', async (callbackQuery) => {
         const realPlanKey = data.match(/plan_\d+/)[0]; 
         const realType = data.includes('RENEW') ? 'RENEW' : 'NEW';
         const realKeyId = data.split('_').pop();
-        userStates[chatId] = { status: 'WAITING_SLIP', plan: PLANS
+        userStates[chatId] = { status: 'WAITING_SLIP', plan: PLANS[realPlanKey], name: userFirstName, type: realType, renewKeyId: realKeyId };
+        bot.sendMessage(chatId, `✅ **Selected:** ${PLANS[realPlanKey].name}\n💰 **Price:** ${PLANS[realPlanKey].price}\n\n${PAYMENT_INFO}`, { parse_mode: 'Markdown' });
+    }
+
+    if (String(chatId) === String(ADMIN_ID)) {
+        if (data === 'admin_panel' || data === 'admin_list_users') await sendUserList(chatId);
+        if (data.startsWith('approve_')) {
+            const buyerId = data.split('_')[1];
+            if (userStates[buyerId]) {
+                const { plan, name, type, renewKeyId } = userStates[buyerId];
+                bot.editMessageCaption("✅ Approved", { chat_id: ADMIN_ID, message_id: msg.message_id });
+                let resultKey;
+                if (type === 'RENEW') resultKey = await renewKeyForUser(renewKeyId, plan, name);
+                else resultKey = await createKeyForUser(buyerId, plan, name);
+                if (resultKey) {
+                    bot.sendMessage(buyerId, `🎉 **Success!**\n\n👤 Name: ${name}\n📅 Expire: ${resultKey.expireDate}\n\n🔗 **Key:**\n\`${resultKey.accessUrl}\``, { parse_mode: 'Markdown' });
+                    delete userStates[buyerId];
+                }
+            }
+        }
+        if (data.startsWith('confirm_delete_')) {
+            const keyId = data.split('_')[2];
+            bot.editMessageText(`⚠️ Delete Key ID: ${keyId}?`, { chat_id: chatId, message_id: msg.message_id, reply_markup: { inline_keyboard: [[{ text: "✅ YES", callback_data: `do_delete_${keyId}` }, { text: "❌ NO", callback_data: `cancel_delete` }]] } });
+        }
+        if (data.startsWith('do_delete_')) { await client.delete(`${OUTLINE_API_URL}/access-keys/${data.split('_')[2]}`); bot.editMessageText("✅ Deleted.", { chat_id: chatId, message_id: msg.message_id }); }
+        if (data === 'cancel_delete') bot.deleteMessage(chatId, msg.message_id);
+        if (data.startsWith('reject_')) { bot.sendMessage(data.split('_')[1], "❌ Rejected."); bot.editMessageCaption("❌ Rejected", { chat_id: ADMIN_ID, message_id: msg.message_id }); }
+    }
+});
+
+bot.on('photo', async (msg) => {
+    const chatId = msg.chat.id;
+    if (userStates[chatId] && userStates[chatId].status === 'WAITING_SLIP') {
+        const { plan, name, type } = userStates[chatId];
+        bot.sendMessage(chatId, "📩 Slip Received.");
+        bot.sendPhoto(ADMIN_ID, msg.photo[msg.photo.length - 1].file_id, {
+            caption: `💰 Order: ${name} | ${plan.name}\nType: ${type === 'RENEW' ? '🔄 RENEW' : '🛒 NEW'}`,
+            reply_markup: { inline_keyboard: [[{ text: "✅ Approve", callback_data: `approve_${chatId}` }, { text: "❌ Reject", callback_data: `reject_${chatId}` }]] }
+        });
+    }
+});
+bot.onText(/\/manage[ _](.+)/, async (msg, match) => { if (String(msg.chat.id) === String(ADMIN_ID)) await sendKeyDetails(msg.chat.id, match[1].trim()); });
+
+async function checkUserStatus(chatId, firstName) {
+    try {
+        const [kRes, mRes] = await Promise.all([client.get(`${OUTLINE_API_URL}/access-keys`), client.get(`${OUTLINE_API_URL}/metrics/transfer`)]);
+        const myKey = kRes.data.accessKeys.find(k => k.name.includes(firstName));
+        if (!myKey) return bot.sendMessage(chatId, "❌ **Account Not Found**");
+        const used = mRes.data.bytesTransferredByUserId[myKey.id] || 0;
+        const limit = myKey.dataLimit ? myKey.dataLimit.bytes : 0;
+        let status = "🟢 Active"; let isBlocked = false;
+        if (limit > 0 && (limit - used) <= 0) { status = "🔴 Data Depleted"; isBlocked = true; }
+        if (limit <= 5000) { status = "🔴 Expired/Blocked"; isBlocked = true; }
+        const isTestKey = myKey.name.startsWith("TEST_");
+        if (isTestKey) status += " (TRIAL)";
+        const msg = `👤 **Name:** ${myKey.name.split('|')[0].trim()}\n📡 **Status:** ${status}\n⬇️ **Used:** ${formatBytes(used)} / ${formatBytes(limit)}\n${getProgressBar(used, limit)}`;
+        const opts = { parse_mode: 'Markdown' };
+        if (isBlocked && !isTestKey) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
+        else if (isTestKey && isBlocked) opts.reply_markup = { inline_keyboard: [[{ text: "🛒 Upgrade to Premium", callback_data: `buy_vpn` }]] };
+        bot.sendMessage(chatId, msg, opts);
+    } catch (e) { bot.sendMessage(chatId, "⚠️ Server Error."); }
+}
+
+async function createKeyForUser(userId, plan, userName) {
+    try {
+        const expireDate = getFutureDate(plan.days);
+        const name = `${userName.replace(/\|/g, '').trim()} | ${expireDate}`;
+        const limit = plan.gb * 1024 * 1024 * 1024;
+        const res = await client.post(`${OUTLINE_API_URL}/access-keys`);
+        await client.put(`${OUTLINE_API_URL}/access-keys/${res.data.id}/name`, { name });
+        await client.put(`${OUTLINE_API_URL}/access-keys/${res.data.id}/data-limit`, { limit: { bytes: limit } });
+        return { accessUrl: res.data.accessUrl, expireDate };
+    } catch (e) { return null; }
+}
+
+async function renewKeyForUser(keyId, plan, userName) {
+    try {
+        const expireDate = getFutureDate(plan.days);
+        const cleanName = userName.replace('TEST_', '').replace(/\|/g, '').trim();
+        const name = `${cleanName} | ${expireDate}`;
+        const limit = plan.gb * 1024 * 1024 * 1024;
+        await client.put(`${OUTLINE_API_URL}/access-keys/${keyId}/name`, { name });
+        await client.put(`${OUTLINE_API_URL}/access-keys/${keyId}/data-limit`, { limit: { bytes: limit } });
+        if (blockedKeys[keyId]) delete blockedKeys[keyId];
+        const res = await client.get(`${OUTLINE_API_URL}/access-keys`);
+        const key = res.data.accessKeys.find(k => String(k.id) === String(keyId));
+        return { accessUrl: key.accessUrl, expireDate };
+    } catch (e) { return null; }
+}
+
+async function sendUserList(chatId) { 
+    try {
+        const res = await client.get(`${OUTLINE_API_URL}/access-keys`);
+        let message = "👥 **User List**\n\n";
+        res.data.accessKeys.forEach(k => { message += `🆔 \`${k.id}\` : ${k.name}\n👉 /manage_${k.id}\n\n`; });
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (e) {}
+}
+
+async function sendKeyDetails(chatId, keyId) {
+    try {
+        const [keysRes, metricsRes] = await Promise.all([client.get(`${OUTLINE_API_URL}/access-keys`), client.get(`${OUTLINE_API_URL}/metrics/transfer`)]);
+        const key = keysRes.data.accessKeys.find(k => String(k.id) === String(keyId));
+        if (!key) return bot.sendMessage(chatId, "❌ Key not found.");
+        const usage = metricsRes.data.bytesTransferredByUserId[key.id] || 0;
+        const limit = key.dataLimit ? key.dataLimit.bytes : 0;
+        const msg = `👤 ${key.name}\n🆔 \`${key.id}\`\n📊 ${formatBytes(usage)} / ${formatBytes(limit)}`;
+        bot.sendMessage(chatId, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🗑️ DELETE", callback_data: `confirm_delete_${key.id}` }]] } });
+    } catch (e) {}
+}
+
+async function runGuardian() {
+    try {
+        const [kRes, mRes] = await Promise.all([client.get(`${OUTLINE_API_URL}/access-keys`), client.get(`${OUTLINE_API_URL}/metrics/transfer`)]);
+        const keys = kRes.data.accessKeys;
+        const usage = mRes.data.bytesTransferredByUserId || {};
+        const today = new Date().toISOString().split('T')[0];
+        const now = Date.now();
+        for (const k of keys) {
+            const lim = k.dataLimit ? k.dataLimit.bytes : 0;
+            const isTestKey = k.name.startsWith("TEST_");
+            if (isTestKey) {
+                let testExpired = false;
+                if (k.name.includes('|')) { const d = k.name.split('|')[1].trim(); if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d < today) testExpired = true; }
+                if (lim > 0 && (usage[k.id] || 0) >= lim) testExpired = true;
+                if (testExpired) { await client.delete(`${OUTLINE_API_URL}/access-keys/${k.id}`); continue; }
+            }
+            if (!isTestKey) {
+                if (lim > 0 && lim <= 5000) {
+                    if (!blockedKeys[k.id]) { blockedKeys[k.id] = now; } 
+                    else { if ((now - blockedKeys[k.id]) / (3600000) >= AUTO_DELETE_HOURS) { try { await client.delete(`${OUTLINE_API_URL}/access-keys/${k.id}`); delete blockedKeys[k.id]; bot.sendMessage(ADMIN_ID, `🗑️ **Auto-Deleted:** ${k.name}`); } catch (err) {} } }
+                    continue;
+                }
+                let block = false;
+                if (k.name.includes('|')) { const d = k.name.split('|')[1].trim(); if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d < today) block = true; }
+                if (lim > 5000 && (usage[k.id] || 0) >= lim) block = true;
+                if (block) { await client.put(`${OUTLINE_API_URL}/access-keys/${k.id}/data-limit`, { limit: { bytes: 1 } }); blockedKeys[k.id] = now; bot.sendMessage(ADMIN_ID, `🚫 **Blocked:** ${k.name}\n⏳ Will delete in 24h.`); }
+            }
+        }
+    } catch (e) { console.error("Guardian Error"); }
+}
+runGuardian();
+setInterval(runGuardian, CHECK_INTERVAL);
+console.log("🚀 Bot Started!");
+END_OF_FILE
+
+# ---------------------------------------------------------
+# APPLY CONFIGURATION
+# ---------------------------------------------------------
+echo -e "${YELLOW}⚙️ Applying Configurations...${NC}"
+
+# Replace Server Config
+sed -i "s|REPLACE_API_URL|$API_URL|g" bot.js
+sed -i "s|REPLACE_BOT_TOKEN|$BOT_TOKEN|g" bot.js
+sed -i "s|REPLACE_ADMIN_ID|$ADMIN_ID|g" bot.js
+
+# Fix Admin Username (Remove @ if exists)
+CLEAN_USERNAME=${ADMIN_USERNAME//@/}
+sed -i "s|REPLACE_ADMIN_USER|$CLEAN_USERNAME|g" bot.js
+
+# Replace Payment Config
+sed -i "s|REPLACE_KPAY_NUM|$KPAY_NUM|g" bot.js
+sed -i "s|REPLACE_KPAY_NAME|$KPAY_NAME|g" bot.js
+sed -i "s|REPLACE_WAVE_NUM|$WAVE_NUM|g" bot.js
+sed -i "s|REPLACE_WAVE_NAME|$WAVE_NAME|g" bot.js
+
+# Replace Plan Configs
+sed -i "s|REPLACE_P1_GB|$P1_GB|g" bot.js; sed -i "s|REPLACE_P1_DAYS|$P1_DAYS|g" bot.js; sed -i "s|REPLACE_P1_PRICE|$P1_PRICE|g" bot.js
+sed -i "s|REPLACE_P2_GB|$P2_GB|g" bot.js; sed -i "s|REPLACE_P2_DAYS|$P2_DAYS|g" bot.js; sed -i "s|REPLACE_P2_PRICE|$P2_PRICE|g" bot.js
+sed -i "s|REPLACE_P3_GB|$P3_GB|g" bot.js; sed -i "s|REPLACE_P3_DAYS|$P3_DAYS|g" bot.js; sed -i "s|REPLACE_P3_PRICE|$P3_PRICE|g" bot.js
+
+# ---------------------------------------------------------
+# START BOT
+# ---------------------------------------------------------
+echo -e "${GREEN}🚀 Stopping old process...${NC}"
+pm2 delete vpn-shop > /dev/null 2>&1
+
+echo -e "${GREEN}🚀 Starting Bot...${NC}"
+pm2 start bot.js --name "vpn-shop"
+pm2 save
+pm2 startup
+
+echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
+echo -e "${YELLOW}Your VPN Shop Bot is running.${NC}"
