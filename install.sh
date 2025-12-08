@@ -285,12 +285,18 @@ async function renewKeyForUser(keyId, plan, userName) {
 }
 
 async function sendUserList(chatId) { 
+    bot.sendMessage(chatId, "⏳ Connecting to Server...");
     try {
         const res = await client.get(`${OUTLINE_API_URL}/access-keys`);
         let message = "👥 **User List**\n\n";
-        res.data.accessKeys.forEach(k => { message += `🆔 \`${k.id}\` : ${k.name}\n👉 /manage_${k.id}\n\n`; });
+        res.data.accessKeys.forEach(k => { 
+            message += `🆔 \`${k.id}\` : ${k.name}\n👉 /manage_${k.id}\n\n`; 
+        });
         bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    } catch (e) {}
+    } catch (e) {
+        console.error(e);
+        bot.sendMessage(chatId, `❌ **Server Connection Failed!**\n\nError: ${e.message}\n\n1. API URL မှန်မမှန် ပြန်စစ်ပါ။\n2. VPS က Outline Server ကို လှမ်းခေါ်လို့ရမရ စစ်ပါ။`);
+    }
 }
 
 async function sendKeyDetails(chatId, keyId) {
