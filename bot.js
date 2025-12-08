@@ -11,9 +11,9 @@ const ADMIN_ID = 1372269701; // သင်၏ Telegram User ID (Slip စစ်ရ
 
 // အရောင်း Plans များ
 const PLANS = {
-    'plan_1': { name: '1 Month - 50 GB', days: 30, gb: 30, price: '3,000 MMK' },
+    'plan_1': { name: '1 Month - 50 GB', days: 30, gb: 1, price: '3,000 MMK' },
     'plan_2': { name: '1 Month - 100 GB', days: 30, gb: 100, price: '5,000 MMK' },
-    'plan_3': { name: 'Unlimited Time - 500 GB', days: 30, gb: 500, price: '20,000 MMK' }
+    'plan_3': { name: '1 Month - 500 GB', days: 30, gb: 500, price: '20,000 MMK' }
 };
 
 // ငွေလက်ခံမည့် အကောင့်များ
@@ -59,7 +59,7 @@ bot.onText(/\/start/, (msg) => {
         reply_markup: {
             inline_keyboard: [
                 [{ text: "🛒 Buy VPN Key", callback_data: 'buy_vpn' }],
-                [{ text: "🆘 Support", url: 'https://t.me/YourUsername' }] 
+                [{ text: "Admin ဆက်သွယ်ရန်", url: 'https://t.me/unpatchpos' }] 
             ]
         }
     };
