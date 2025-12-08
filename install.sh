@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (MM BUTTONS)    ${NC}"
+echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (MYANMAR TIME)  ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
@@ -122,20 +122,24 @@ const CLAIM_FILE = 'claimed_users.json';
 let claimedUsers = [];
 if (fs.existsSync(CLAIM_FILE)) { try { claimedUsers = JSON.parse(fs.readFileSync(CLAIM_FILE)); } catch(e) {} }
 
-// --- HELPERS (DELL STYLE) ---
+// --- HELPERS (MYANMAR TIME) ---
 function formatBytes(bytes) {
     if (!bytes || bytes === 0) return '0 B';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + ['B', 'KB', 'MB', 'GB', 'TB'][i];
 }
 
-function getFutureDate(days) {
-    const date = new Date(); date.setDate(date.getDate() + parseInt(days)); return date.toISOString().split('T')[0];
+// 🔥 Myanmar Time (YYYY-MM-DD)
+function getMyanmarDate(offsetDays = 0) {
+    const date = new Date();
+    date.setDate(date.getDate() + parseInt(offsetDays));
+    return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' });
 }
 
 function getDaysRemaining(dateString) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return "Unknown";
-    const today = new Date();
+    const todayStr = getMyanmarDate(0); // Use Myanmar Today
+    const today = new Date(todayStr);
     const target = new Date(dateString);
     const diffTime = target - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -152,7 +156,7 @@ function getProgressBar(used, total) {
 }
 
 // ================================================================
-// 🎨 MAIN MENU LAYOUT (CUSTOM NAMES)
+// 🎨 MAIN MENU LAYOUT
 // ================================================================
 const mainMenuKeyboard = {
     reply_markup: {
@@ -192,7 +196,7 @@ bot.onText(/\/admin/, (msg) => {
     }
 });
 
-// --- MENU BUTTON LOGIC MAPPING (UPDATED NAMES) ---
+// --- MENU BUTTON LOGIC MAPPING ---
 
 // 1. FREE TEST KEY
 bot.onText(/^(🆓 အစမ်း Key \(1GB\)\(1Day\))$/, async (msg) => {
@@ -205,7 +209,7 @@ bot.onText(/^(🆓 အစမ်း Key \(1GB\)\(1Day\))$/, async (msg) => {
     
     bot.sendMessage(chatId, "⏳ Creating Test Key...");
     try {
-        const expireDate = getFutureDate(TEST_PLAN.days);
+        const expireDate = getMyanmarDate(TEST_PLAN.days); // Use MM Time
         const name = `TEST_${userFirstName.replace(/\|/g, '').trim()} | ${expireDate}`;
         const limit = TEST_PLAN.gb * 1024 * 1024 * 1024;
         const res = await client.post(`${OUTLINE_API_URL}/access-keys`);
@@ -242,12 +246,12 @@ bot.on('callback_query', async (callbackQuery) => {
     const data = callbackQuery.data;
     const userFirstName = callbackQuery.from.first_name;
 
-    // (Inline button version of Test Key - just in case used elsewhere)
+    // (Inline button version of Test Key)
     if (data === 'get_test_key') {
         if (claimedUsers.includes(chatId)) { return bot.sendMessage(chatId, "⚠️ **Sorry!**\nမိတ်ဆွေ Test Key ထုတ်ယူပြီးသား ဖြစ်ပါသည်။"); }
         bot.sendMessage(chatId, "⏳ Creating Test Key...");
         try {
-            const expireDate = getFutureDate(TEST_PLAN.days);
+            const expireDate = getMyanmarDate(TEST_PLAN.days); // Use MM Time
             const name = `TEST_${userFirstName.replace(/\|/g, '').trim()} | ${expireDate}`;
             const limit = TEST_PLAN.gb * 1024 * 1024 * 1024;
             const res = await client.post(`${OUTLINE_API_URL}/access-keys`);
@@ -340,7 +344,6 @@ async function checkUserStatus(chatId, firstName) {
 
         const remainingDays = getDaysRemaining(expireDate);
 
-        // 🔥 MODIFIED TO "Remaining Data" 🔥
         const msg = `
 👤 **Name:** ${cleanName}
 📡 **Status:** ${status}
@@ -364,7 +367,7 @@ ${getProgressBar(used, limit)}
 
 async function createKeyForUser(userId, plan, userName) {
     try {
-        const expireDate = getFutureDate(plan.days);
+        const expireDate = getMyanmarDate(plan.days); // Use MM Time
         const name = `${userName.replace(/\|/g, '').trim()} | ${expireDate}`;
         const limit = plan.gb * 1024 * 1024 * 1024;
         const res = await client.post(`${OUTLINE_API_URL}/access-keys`);
@@ -376,7 +379,7 @@ async function createKeyForUser(userId, plan, userName) {
 
 async function renewKeyForUser(keyId, plan, userName) {
     try {
-        const expireDate = getFutureDate(plan.days);
+        const expireDate = getMyanmarDate(plan.days); // Use MM Time
         const cleanName = userName.replace('TEST_', '').replace(/\|/g, '').trim();
         const name = `${cleanName} | ${expireDate}`;
         const limit = plan.gb * 1024 * 1024 * 1024;
@@ -420,7 +423,6 @@ async function sendKeyDetails(chatId, keyId) {
 
         const remainingDays = getDaysRemaining(expireDate);
 
-        // 🔥 MODIFIED TO "Remaining Data" 🔥
         const msg = `
 👮‍♂️ **User Management**
 -----------------------
@@ -444,7 +446,7 @@ async function runGuardian() {
         const [kRes, mRes] = await Promise.all([client.get(`${OUTLINE_API_URL}/access-keys`), client.get(`${OUTLINE_API_URL}/metrics/transfer`)]);
         const keys = kRes.data.accessKeys;
         const usage = mRes.data.bytesTransferredByUserId || {};
-        const today = new Date().toISOString().split('T')[0];
+        const today = getMyanmarDate(0); // Use MM Time
         const now = Date.now();
         for (const k of keys) {
             const lim = k.dataLimit ? k.dataLimit.bytes : 0;
@@ -511,4 +513,4 @@ pm2 save
 pm2 startup
 
 echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
-echo -e "${YELLOW}Buttons renamed to Burmese!${NC}"
+echo -e "${YELLOW}Your VPN Shop Bot is running with Myanmar Time!${NC}"
