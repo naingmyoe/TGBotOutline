@@ -8,7 +8,7 @@ NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN}   🚀 VPN SHOP BOT AUTO INSTALLER v2.0   ${NC}"
+echo -e "${GREEN}   🚀 VPN SHOP BOT CUSTOM INSTALLER v3.0   ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
@@ -26,18 +26,41 @@ read -p "2. Wave Phone Number: " WAVE_NUM
 read -p "   Wave Account Name: " WAVE_NAME
 
 echo -e ""
-# --- 3. Plan Pricing ---
-echo -e "${CYAN}--- [3/3] PLAN PRICING (Enter Price only, e.g., 3000 MMK) ---${NC}"
-echo -e "${YELLOW}(Default GB/Days: Plan1=10GB/30Days, Plan2=30GB/30Days, Plan3=50GB/Unlimited)${NC}"
+# --- 3. Plan Customization ---
+echo -e "${CYAN}--- [3/3] PLAN CUSTOMIZATION ---${NC}"
+echo -e "${YELLOW}Tip: For Unlimited Time, enter 999 in Days.${NC}"
 
-read -p "Price for Plan 1 (10 GB): " P1_PRICE
-read -p "Price for Plan 2 (30 GB): " P2_PRICE
-read -p "Price for Plan 3 (50 GB): " P3_PRICE
+# PLAN 1
+echo -e "\n${GREEN}👉 Plan 1 Settings:${NC}"
+read -p "   GB Amount (e.g., 10): " P1_GB
+read -p "   Duration Days (e.g., 30): " P1_DAYS
+read -p "   Price (e.g., 3000 MMK): " P1_PRICE
 
-# Default Values if user presses Enter
+# PLAN 2
+echo -e "\n${GREEN}👉 Plan 2 Settings:${NC}"
+read -p "   GB Amount (e.g., 30): " P2_GB
+read -p "   Duration Days (e.g., 30): " P2_DAYS
+read -p "   Price (e.g., 7000 MMK): " P2_PRICE
+
+# PLAN 3
+echo -e "\n${GREEN}👉 Plan 3 Settings:${NC}"
+read -p "   GB Amount (e.g., 50): " P3_GB
+read -p "   Duration Days (e.g., 999): " P3_DAYS
+read -p "   Price (e.g., 12000 MMK): " P3_PRICE
+
+# Set Defaults if empty
+P1_GB=${P1_GB:-10}
+P1_DAYS=${P1_DAYS:-30}
 P1_PRICE=${P1_PRICE:-3,000 MMK}
+
+P2_GB=${P2_GB:-30}
+P2_DAYS=${P2_DAYS:-30}
 P2_PRICE=${P2_PRICE:-7,000 MMK}
+
+P3_GB=${P3_GB:-50}
+P3_DAYS=${P3_DAYS:-999}
 P3_PRICE=${P3_PRICE:-12,000 MMK}
+
 
 # ---------------------------------------------------------
 # SYSTEM SETUP START
@@ -52,7 +75,7 @@ echo -e "${YELLOW}📁 Setting up Project Folder...${NC}"
 mkdir -p /root/vpn-shop
 cd /root/vpn-shop
 
-echo -e "${YELLOW}📦 Installing Libraries (axios, telegram-bot, pm2)...${NC}"
+echo -e "${YELLOW}📦 Installing Libraries...${NC}"
 npm init -y > /dev/null 2>&1
 npm install axios node-telegram-bot-api pm2 -g
 npm install pm2 -g
@@ -78,10 +101,26 @@ const ADMIN_ID = REPLACE_ADMIN_ID;
 const AUTO_DELETE_HOURS = 24; 
 const TEST_PLAN = { days: 1, gb: 1 }; 
 
+// PLANS CONFIGURATION
 const PLANS = {
-    'plan_1': { name: '1 Month - 10 GB', days: 30, gb: 10, price: 'REPLACE_P1_PRICE' },
-    'plan_2': { name: '1 Month - 30 GB', days: 30, gb: 30, price: 'REPLACE_P2_PRICE' },
-    'plan_3': { name: 'Unlimited Time - 50 GB', days: 999, gb: 50, price: 'REPLACE_P3_PRICE' }
+    'plan_1': { 
+        name: 'REPLACE_P1_DAYS Days - REPLACE_P1_GB GB', 
+        days: REPLACE_P1_DAYS, 
+        gb: REPLACE_P1_GB, 
+        price: 'REPLACE_P1_PRICE' 
+    },
+    'plan_2': { 
+        name: 'REPLACE_P2_DAYS Days - REPLACE_P2_GB GB', 
+        days: REPLACE_P2_DAYS, 
+        gb: REPLACE_P2_GB, 
+        price: 'REPLACE_P2_PRICE' 
+    },
+    'plan_3': { 
+        name: 'REPLACE_P3_DAYS Days - REPLACE_P3_GB GB', 
+        days: REPLACE_P3_DAYS, 
+        gb: REPLACE_P3_GB, 
+        price: 'REPLACE_P3_PRICE' 
+    }
 };
 
 const PAYMENT_INFO = `
@@ -340,20 +379,30 @@ EOF
 # ---------------------------------------------------------
 echo -e "${YELLOW}⚙️ Applying Configurations...${NC}"
 
-# Replace Server Config
+# Server Config
 sed -i "s|REPLACE_API_URL|$API_URL|g" bot.js
 sed -i "s|REPLACE_BOT_TOKEN|$BOT_TOKEN|g" bot.js
 sed -i "s|REPLACE_ADMIN_ID|$ADMIN_ID|g" bot.js
 
-# Replace Payment Config (using | as delimiter to avoid issues with names)
+# Payment Config
 sed -i "s|REPLACE_KPAY_NUM|$KPAY_NUM|g" bot.js
 sed -i "s|REPLACE_KPAY_NAME|$KPAY_NAME|g" bot.js
 sed -i "s|REPLACE_WAVE_NUM|$WAVE_NUM|g" bot.js
 sed -i "s|REPLACE_WAVE_NAME|$WAVE_NAME|g" bot.js
 
-# Replace Plan Config
+# Plan 1 Config
+sed -i "s|REPLACE_P1_GB|$P1_GB|g" bot.js
+sed -i "s|REPLACE_P1_DAYS|$P1_DAYS|g" bot.js
 sed -i "s|REPLACE_P1_PRICE|$P1_PRICE|g" bot.js
+
+# Plan 2 Config
+sed -i "s|REPLACE_P2_GB|$P2_GB|g" bot.js
+sed -i "s|REPLACE_P2_DAYS|$P2_DAYS|g" bot.js
 sed -i "s|REPLACE_P2_PRICE|$P2_PRICE|g" bot.js
+
+# Plan 3 Config
+sed -i "s|REPLACE_P3_GB|$P3_GB|g" bot.js
+sed -i "s|REPLACE_P3_DAYS|$P3_DAYS|g" bot.js
 sed -i "s|REPLACE_P3_PRICE|$P3_PRICE|g" bot.js
 
 # ---------------------------------------------------------
@@ -365,4 +414,3 @@ pm2 save
 pm2 startup
 
 echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
-echo -e "${GREEN}Your VPN Shop Bot is running.${NC}"
