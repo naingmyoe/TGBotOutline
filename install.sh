@@ -8,14 +8,15 @@ NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN}   🚀 VPN SHOP BOT CUSTOM INSTALLER v3.0   ${NC}"
+echo -e "${GREEN}   🚀 VPN SHOP BOT FINAL INSTALLER v4.0    ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
 echo -e "${CYAN}--- [1/3] SERVER CONFIGURATION ---${NC}"
 read -p "1. Enter Telegram Bot Token: " BOT_TOKEN
 read -p "2. Enter Outline API URL (Full URL): " API_URL
-read -p "3. Enter Admin Telegram ID: " ADMIN_ID
+read -p "3. Enter Admin Telegram ID (for control panel): " ADMIN_ID
+read -p "4. Enter Admin Username (for Support button, e.g. @admin): " ADMIN_USERNAME
 
 echo -e ""
 # --- 2. Payment Configuration ---
@@ -173,7 +174,7 @@ bot.onText(/\/start/, (msg) => {
         [{ text: "🆓 Get Free Test Key (1GB)", callback_data: 'get_test_key' }],
         [{ text: "🛒 Buy Premium Key", callback_data: 'buy_vpn' }],
         [{ text: "👤 My Account (Renew)", callback_data: 'check_status' }],
-        [{ text: "🆘 Contact Admin", url: 'https://t.me/YourUsername' }]
+        [{ text: "🆘 Contact Admin", url: 'https://t.me/REPLACE_ADMIN_USER' }]
     ];
     if (msg.chat.id === ADMIN_ID) buttons.push([{ text: "👮‍♂️ Admin Panel", callback_data: 'admin_panel' }]);
     bot.sendMessage(msg.chat.id, "👋 Welcome to VPN Shop!", { reply_markup: { inline_keyboard: buttons } });
@@ -384,6 +385,10 @@ sed -i "s|REPLACE_API_URL|$API_URL|g" bot.js
 sed -i "s|REPLACE_BOT_TOKEN|$BOT_TOKEN|g" bot.js
 sed -i "s|REPLACE_ADMIN_ID|$ADMIN_ID|g" bot.js
 
+# Clean Username (Remove @ if present) and Replace
+CLEAN_USERNAME=${ADMIN_USERNAME//@/}
+sed -i "s|REPLACE_ADMIN_USER|$CLEAN_USERNAME|g" bot.js
+
 # Payment Config
 sed -i "s|REPLACE_KPAY_NUM|$KPAY_NUM|g" bot.js
 sed -i "s|REPLACE_KPAY_NAME|$KPAY_NAME|g" bot.js
@@ -414,3 +419,4 @@ pm2 save
 pm2 startup
 
 echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
+echo -e "${GREEN}Your VPN Shop Bot is running.${NC}"
