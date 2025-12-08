@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (FINAL UI)      ${NC}"
+echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (SIMPLE 4 BTN)  ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
@@ -152,15 +152,13 @@ function getProgressBar(used, total) {
 }
 
 // ================================================================
-// 🎨 MAIN MENU LAYOUT
+// 🎨 MAIN MENU LAYOUT (ONLY 4 BUTTONS)
 // ================================================================
 const mainMenuKeyboard = {
     reply_markup: {
         keyboard: [
-            [{ text: "👤 ကျွန်ုပ်၏ Credit" }, { text: "💳 ငွေဖြည့်" }],
-            [{ text: "VPN Key ဝယ်ရန်" }, { text: "🗝️ QITO Net" }],
-            [{ text: "🔓 Bypass VIP" }, { text: "📂 File ဝယ်မယ်" }],
-            [{ text: "📋 ကျွန်ုပ်၏ပက်ကေ့ချ်" }, { text: "📞 ဆက်သွယ်ရန်" }]
+            [{ text: "🆓 Get Free Test Key (1GB)" }, { text: "🛒 Buy Premium Key" }],
+            [{ text: "👤 My Account (Renew)" }, { text: "🆘 Contact Admin" }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -176,26 +174,7 @@ bot.onText(/\/start/, (msg) => {
         bot.sendMessage(userId, "👮‍♂️ **Admin Detected**\nUse /admin to open panel.", { parse_mode: 'Markdown' });
     }
 
-    // 🔥 MODIFIED INLINE BUTTONS AS REQUESTED 🔥
-    const inlineButtons = [
-        [{ text: "🆓 Get Free Test Key (1GB)", callback_data: 'get_test_key' }],
-        [{ text: "🛒 Buy Premium Key", callback_data: 'buy_vpn' }],
-        [{ text: "👤 My Account (Renew)", callback_data: 'check_status' }],
-        [{ text: "🆘 Contact Admin", url: 'https://t.me/REPLACE_ADMIN_USER' }]
-    ];
-
-    bot.sendMessage(userId, "👋 မင်္ဂလာပါ VPN Shop မှ ကြိုဆိုပါတယ်။\nမိမိလိုအပ်သော ဝန်ဆောင်မှုကို အောက်တွင် ရွေးချယ်နိုင်ပါသည်။", {
-        reply_markup: {
-            keyboard: mainMenuKeyboard.reply_markup.keyboard,
-            resize_keyboard: true,
-            one_time_keyboard: false,
-            // We send the inline buttons in a separate message or attached here?
-            // Usually attached to text. But Main Menu is "keyboard", Inline is "inline_keyboard".
-            // Telegram doesn't allow BOTH in one message easily.
-            // Best practice: Send Text with Inline Buttons, and the Persistent Menu stays at bottom.
-            inline_keyboard: inlineButtons
-        }
-    });
+    bot.sendMessage(userId, "👋 မင်္ဂလာပါ VPN Shop မှ ကြိုဆိုပါတယ်။\nမိမိလိုအပ်သော ဝန်ဆောင်မှုကို အောက်တွင် ရွေးချယ်နိုင်ပါသည်။", mainMenuKeyboard);
 });
 
 // Admin Panel Command
@@ -213,25 +192,46 @@ bot.onText(/\/admin/, (msg) => {
     }
 });
 
-// --- MENU BUTTON LOGIC ---
-bot.onText(/^(👤 ကျွန်ုပ်၏ Credit|📋 ကျွန်ုပ်၏ပက်ကေ့ချ်)$/, async (msg) => {
+// --- MENU BUTTON LOGIC MAPPING ---
+
+// 1. FREE TEST KEY (Logic directly in onText)
+bot.onText(/^(🆓 Get Free Test Key \(1GB\))$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userFirstName = msg.from.first_name;
+
+    if (claimedUsers.includes(chatId)) { 
+        return bot.sendMessage(chatId, "⚠️ **Sorry!**\nမိတ်ဆွေ Test Key ထုတ်ယူပြီးသား ဖြစ်ပါသည်။\nPremium Plan ကို ဝယ်ယူအသုံးပြုပေးပါ။", { parse_mode: 'Markdown' }); 
+    }
+    
+    bot.sendMessage(chatId, "⏳ Creating Test Key...");
+    try {
+        const expireDate = getFutureDate(TEST_PLAN.days);
+        const name = `TEST_${userFirstName.replace(/\|/g, '').trim()} | ${expireDate}`;
+        const limit = TEST_PLAN.gb * 1024 * 1024 * 1024;
+        const res = await client.post(`${OUTLINE_API_URL}/access-keys`);
+        await client.put(`${OUTLINE_API_URL}/access-keys/${res.data.id}/name`, { name });
+        await client.put(`${OUTLINE_API_URL}/access-keys/${res.data.id}/data-limit`, { limit: { bytes: limit } });
+        claimedUsers.push(chatId); fs.writeFileSync(CLAIM_FILE, JSON.stringify(claimedUsers));
+        bot.sendMessage(chatId, `🎉 **Free Trial Created!**\n\n👤 Name: ${userFirstName}\n📦 Limit: 1 GB\n📅 Expire: 1 Day\n\n🔗 **Key:**\n\`${res.data.accessUrl}\``, { parse_mode: 'Markdown' });
+    } catch (e) { bot.sendMessage(chatId, "❌ Error creating test key."); }
+});
+
+// 2. BUY PREMIUM KEY
+bot.onText(/^(🛒 Buy Premium Key)$/, (msg) => {
+    const keyboard = Object.keys(PLANS).map(key => [{ text: `${PLANS[key].name} - ${PLANS[key].price}`, callback_data: `select_${key}_NEW_0` }]);
+    bot.sendMessage(msg.chat.id, "📅 **မိမိဝယ်ယူလိုသော Plan ကို ရွေးချယ်ပါ:**", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
+});
+
+// 3. MY ACCOUNT
+bot.onText(/^(👤 My Account \(Renew\))$/, async (msg) => {
     bot.sendMessage(msg.chat.id, "🔎 Checking Account Status...");
     await checkUserStatus(msg.chat.id, msg.from.first_name);
 });
 
-bot.onText(/^(💳 ငွေဖြည့်)$/, (msg) => {
-    bot.sendMessage(msg.chat.id, `💰 **ငွေဖြည့်ရန် အောက်ပါအကောင့်များကို အသုံးပြုနိုင်ပါသည်:**\n\n${PAYMENT_INFO}`, { parse_mode: 'Markdown' });
-});
-
-bot.onText(/^(VPN Key ဝယ်ရန်|🔓 Bypass VIP|🗝️ QITO Net|📂 File ဝယ်မယ်)$/, (msg) => {
-    const keyboard = Object.keys(PLANS).map(key => [{ text: `${PLANS[key].name} - ${PLANS[key].price}`, callback_data: `select_${key}_NEW_0` }]);
-    keyboard.unshift([{ text: "🆓 Get Free Test Key (1GB)", callback_data: 'get_test_key' }]);
-    bot.sendMessage(msg.chat.id, "📅 **မိမိဝယ်ယူလိုသော Plan ကို ရွေးချယ်ပါ:**", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
-});
-
-bot.onText(/^(📞 ဆက်သွယ်ရန်)$/, (msg) => {
+// 4. CONTACT ADMIN
+bot.onText(/^(🆘 Contact Admin)$/, (msg) => {
     bot.sendMessage(msg.chat.id, "🆘 Admin သို့ တိုက်ရိုက်ဆက်သွယ်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။", {
-        reply_markup: { inline_keyboard: [[{ text: "🆘 Contact Admin", url: `https://t.me/REPLACE_ADMIN_USER` }]] }
+        reply_markup: { inline_keyboard: [[{ text: "💬 Chat with Admin", url: `https://t.me/REPLACE_ADMIN_USER` }]] }
     });
 });
 
@@ -242,6 +242,7 @@ bot.on('callback_query', async (callbackQuery) => {
     const data = callbackQuery.data;
     const userFirstName = callbackQuery.from.first_name;
 
+    // (Inline button version of Test Key - just in case used elsewhere)
     if (data === 'get_test_key') {
         if (claimedUsers.includes(chatId)) { return bot.sendMessage(chatId, "⚠️ **Sorry!**\nမိတ်ဆွေ Test Key ထုတ်ယူပြီးသား ဖြစ်ပါသည်။"); }
         bot.sendMessage(chatId, "⏳ Creating Test Key...");
@@ -329,8 +330,10 @@ async function checkUserStatus(chatId, firstName) {
         if (myKey.name.includes('|')) { const parts = myKey.name.split('|'); cleanName = parts[0].trim(); expireDate = parts[1].trim(); }
 
         let status = "🟢 Active";
-        if (limit > 0 && remaining <= 0) status = "🔴 Data Depleted";
-        if (limit <= 5000) status = "🔴 Expired/Blocked";
+        let isBlocked = false;
+        if (limit > 0 && remaining <= 0) { status = "🔴 Data Depleted"; isBlocked = true; }
+        if (limit <= 5000) { status = "🔴 Expired/Blocked"; isBlocked = true; }
+        if (myKey.name.startsWith("TEST_")) status += " (TRIAL)";
 
         const remainingDays = getDaysRemaining(expireDate);
 
@@ -346,7 +349,8 @@ async function checkUserStatus(chatId, firstName) {
 ${getProgressBar(used, limit)}
 `;
         const opts = { parse_mode: 'Markdown' };
-        if (limit <= 5000) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
+        if (isBlocked && !myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
+        else if (isBlocked && myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🛒 Upgrade to Premium", callback_data: `buy_vpn` }]] };
         
         bot.sendMessage(chatId, msg, opts);
     } catch (e) { bot.sendMessage(chatId, "⚠️ Server Error."); }
@@ -380,13 +384,15 @@ async function renewKeyForUser(keyId, plan, userName) {
 }
 
 async function sendUserList(chatId) { 
-    bot.sendMessage(chatId, "⏳ Connecting...");
+    bot.sendMessage(chatId, "⏳ Connecting to Server...");
     try {
         const res = await client.get(`${OUTLINE_API_URL}/access-keys`);
         let message = "👥 **User List**\n\n";
         res.data.accessKeys.forEach(k => { message += `🆔 \`${k.id}\` : ${k.name}\n👉 /manage_${k.id}\n\n`; });
         bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    } catch (e) { bot.sendMessage(chatId, `❌ **API Error:** ${e.message}`); }
+    } catch (e) {
+        bot.sendMessage(chatId, `❌ **API Error!**\n\n${e.message}`);
+    }
 }
 
 async function sendKeyDetails(chatId, keyId) {
@@ -422,7 +428,9 @@ async function sendKeyDetails(chatId, keyId) {
 ${getProgressBar(usage, limit)}
 `;
         bot.sendMessage(chatId, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🗑️ DELETE", callback_data: `confirm_delete_${key.id}` }]] } });
-    } catch (e) { bot.sendMessage(chatId, `❌ Error: ${e.message}`); }
+    } catch (e) {
+        bot.sendMessage(chatId, `❌ **Error:** ${e.message}`);
+    }
 }
 
 async function runGuardian() {
@@ -497,4 +505,4 @@ pm2 save
 pm2 startup
 
 echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
-echo -e "${YELLOW}Label updated to 'Remaining Data' successfully!${NC}"
+echo -e "${YELLOW}Your VPN Shop Bot is running with the requested UI!${NC}"
