@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 clear
 echo -e "${GREEN}===========================================${NC}"
-echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (SIMPLE 4 BTN)  ${NC}"
+echo -e "${GREEN} 🚀 VPN SHOP BOT INSTALLER (MM BUTTONS)    ${NC}"
 echo -e "${GREEN}===========================================${NC}"
 
 # --- 1. Bot & Server Config ---
@@ -152,13 +152,13 @@ function getProgressBar(used, total) {
 }
 
 // ================================================================
-// 🎨 MAIN MENU LAYOUT (ONLY 4 BUTTONS)
+// 🎨 MAIN MENU LAYOUT (CUSTOM NAMES)
 // ================================================================
 const mainMenuKeyboard = {
     reply_markup: {
         keyboard: [
-            [{ text: "🆓 Get Free Test Key (1GB)" }, { text: "🛒 Buy Premium Key" }],
-            [{ text: "👤 My Account (Renew)" }, { text: "🆘 Contact Admin" }]
+            [{ text: "🆓 အစမ်း Key (1GB)(1Day)" }, { text: "🛒 VPN Key ဝယ်ရန်" }],
+            [{ text: "👤 Package စစ်ရန်" }, { text: "🆘 ဆက်သွယ်ရန်" }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -192,10 +192,10 @@ bot.onText(/\/admin/, (msg) => {
     }
 });
 
-// --- MENU BUTTON LOGIC MAPPING ---
+// --- MENU BUTTON LOGIC MAPPING (UPDATED NAMES) ---
 
-// 1. FREE TEST KEY (Logic directly in onText)
-bot.onText(/^(🆓 Get Free Test Key \(1GB\))$/, async (msg) => {
+// 1. FREE TEST KEY
+bot.onText(/^(🆓 အစမ်း Key \(1GB\)\(1Day\))$/, async (msg) => {
     const chatId = msg.chat.id;
     const userFirstName = msg.from.first_name;
 
@@ -217,19 +217,19 @@ bot.onText(/^(🆓 Get Free Test Key \(1GB\))$/, async (msg) => {
 });
 
 // 2. BUY PREMIUM KEY
-bot.onText(/^(🛒 Buy Premium Key)$/, (msg) => {
+bot.onText(/^(🛒 VPN Key ဝယ်ရန်)$/, (msg) => {
     const keyboard = Object.keys(PLANS).map(key => [{ text: `${PLANS[key].name} - ${PLANS[key].price}`, callback_data: `select_${key}_NEW_0` }]);
     bot.sendMessage(msg.chat.id, "📅 **မိမိဝယ်ယူလိုသော Plan ကို ရွေးချယ်ပါ:**", { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
 });
 
 // 3. MY ACCOUNT
-bot.onText(/^(👤 My Account \(Renew\))$/, async (msg) => {
+bot.onText(/^(👤 Package စစ်ရန်)$/, async (msg) => {
     bot.sendMessage(msg.chat.id, "🔎 Checking Account Status...");
     await checkUserStatus(msg.chat.id, msg.from.first_name);
 });
 
 // 4. CONTACT ADMIN
-bot.onText(/^(🆘 Contact Admin)$/, (msg) => {
+bot.onText(/^(🆘 ဆက်သွယ်ရန်)$/, (msg) => {
     bot.sendMessage(msg.chat.id, "🆘 Admin သို့ တိုက်ရိုက်ဆက်သွယ်ရန် အောက်ပါခလုတ်ကို နှိပ်ပါ။", {
         reply_markup: { inline_keyboard: [[{ text: "💬 Chat with Admin", url: `https://t.me/REPLACE_ADMIN_USER` }]] }
     });
@@ -329,6 +329,9 @@ async function checkUserStatus(chatId, firstName) {
         let cleanName = myKey.name; let expireDate = "Unknown";
         if (myKey.name.includes('|')) { const parts = myKey.name.split('|'); cleanName = parts[0].trim(); expireDate = parts[1].trim(); }
 
+        // Sanitize Name
+        cleanName = cleanName.replace(/[_*\[\]()~`>#+\-=|{}.!]/g, " ");
+
         let status = "🟢 Active";
         let isBlocked = false;
         if (limit > 0 && remaining <= 0) { status = "🔴 Data Depleted"; isBlocked = true; }
@@ -349,11 +352,14 @@ async function checkUserStatus(chatId, firstName) {
 ${getProgressBar(used, limit)}
 `;
         const opts = { parse_mode: 'Markdown' };
-        if (isBlocked && !myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
-        else if (isBlocked && myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🛒 Upgrade to Premium", callback_data: `buy_vpn` }]] };
+        if (limit <= 5000 && !myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🔄 RENEW KEY NOW", callback_data: `renew_start_${myKey.id}` }]] };
+        else if (limit <= 5000 && myKey.name.startsWith("TEST_")) opts.reply_markup = { inline_keyboard: [[{ text: "🛒 Upgrade to Premium", callback_data: `buy_vpn` }]] };
         
         bot.sendMessage(chatId, msg, opts);
-    } catch (e) { bot.sendMessage(chatId, "⚠️ Server Error."); }
+    } catch (e) { 
+        console.error(e);
+        bot.sendMessage(chatId, "⚠️ Server Error."); 
+    }
 }
 
 async function createKeyForUser(userId, plan, userName) {
@@ -505,4 +511,4 @@ pm2 save
 pm2 startup
 
 echo -e "\n${GREEN}✅ INSTALLATION SUCCESSFUL!${NC}"
-echo -e "${YELLOW}Your VPN Shop Bot is running with the requested UI!${NC}"
+echo -e "${YELLOW}Buttons renamed to Burmese!${NC}"
